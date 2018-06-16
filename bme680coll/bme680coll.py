@@ -53,10 +53,10 @@ def init_bme680(bme_addr):
         sensor.select_gas_heater_profile(0)
         return sensor
     except Exception:
-        print("Cannot initialize BME680 at addr {0}".format(str(bme_addr)))
+        gn_conn.LOG_ERROR("Cannot initialize BME680 at addr {0}".format(str(bme_addr)))
         return None
 
-async def burn_in_sensor(sensor, burn_in_time):
+async def burn_in_sensor(sensor, burn_in_time, gn_conn):
     start_time = time.time()
     curr_time = time.time()
     burn_in_data = []
@@ -67,13 +67,11 @@ async def burn_in_sensor(sensor, burn_in_time):
         if sensor.get_sensor_data() and sensor.data.heat_stable:
             gas = sensor.data.gas_resistance
             burn_in_data.append(gas)
-            if debug_mode:
-                print("Gas: {0:.2f} Ohms  Time:{1:.2f}".format(gas, curr_time - start_time))
+            gn_conn.LOG_DEBUG("Gas: {0:.2f} Ohms  Time:{1:.2f}".format(gas, curr_time - start_time))
         await asyncio.sleep(1)
 
     gas_baseline = sum(burn_in_data[-50:]) / 50.0
-    if debug_mode:
-        print("Computed gas baseline: {0} Ohms".format(gas_baseline))
+    gn_conn.LOG_DEBUG("Computed gas baseline: {0} Ohms".format(gas_baseline))
 
     return
 
@@ -85,7 +83,7 @@ async def poll_sensor(gn_conn, sensor, poll_time, uid_prefix):
     pres_dev = gn_conn.find_dev_byuid(uid_prefix + 'pres')
 
     if gas_dev is None or hum_dev is None or temp_dev is None or pres_dev is None:
-        print("ERROR: Cannot find devices")
+        gn_conn.LOG_ERROR("Cannot find devices")
         await gn_conn.shutdown(signal.SIGTERM, gn_conn.loop)
 
     while True:
@@ -106,7 +104,7 @@ async def poll_sensor(gn_conn, sensor, poll_time, uid_prefix):
             pres_dev['data'] = pressure
             pres_dev['lastupd'] = cur_time
 
-            gn_conn.dprint('Gas:{0:.2f} Humid:{1:.2f} Temp:{2:.2f} Pres:{3:.2f}'.format(gas, hum, temp, pressure))
+            gn_conn.LOG_DEBUG('Gas:{0:.2f} Humid:{1:.2f} Temp:{2:.2f} Pres:{3:.2f}'.format(gas, hum, temp, pressure))
 
             await gn_conn.gn_update_device(gas_dev)
             await gn_conn.gn_update_device(hum_dev)
@@ -114,12 +112,12 @@ async def poll_sensor(gn_conn, sensor, poll_time, uid_prefix):
             await gn_conn.gn_update_device(pres_dev)
 
         else:
-            print("WARNING: Sensors not operating")
+            gn_conn.LOG_WARNING("Sensors not operating")
 
         await asyncio.sleep(poll_time)
 
 
-async def initial_setup(args, uid_prefix):
+async def initial_setup(args, uid_prefix, loop):
     print("This is your first run of the collector, setting up")
     print("Using gnhast server at {0}:{1}".format(args.server, str(args.port)))
     try:
@@ -143,7 +141,7 @@ async def initial_setup(args, uid_prefix):
     cf.close()
     print("Wrote initial config file at {0}, connecting to gnhastd".format(args.conf))
 
-    gn_conn = gnhast.gnhast(args.conf)
+    gn_conn = gnhast.gnhast(loop, args.conf)
     await gn_conn.gn_build_client('BME680-{0}'.format(args.address))
 
     print("Connection established, wiring devices")
@@ -193,17 +191,20 @@ async def main(loop):
     uid_prefix = args.uid_prefix + 'BME680-' + args.address + '-'
 
     if not os.path.isfile(args.conf):
-        await initial_setup(args, uid_prefix)
+        await initial_setup(args, uid_prefix, loop)
         exit(0)
 
     gn_conn = gnhast.gnhast(loop, args.conf)
     gn_conn.debug = debug_mode
+
     await gn_conn.gn_build_client('BME680-{0}'.format(args.address))
+    gn_conn.LOG("BME680 collector starting up")
+
     i2c_addr = gn_conn.config['bme680coll']['i2c_addr']
     i2c_addr_int = int(i2c_addr, 16)
     sensor = init_bme680(i2c_addr_int)
     if sensor is None:
-        print('ERROR: Could not intialize BME680')
+        gn_conn.LOG_ERROR('Could not intialize BME680')
         return
     burn_in = gn_conn.config['bme680coll']['burn_in']
     burn_in = 50
@@ -219,7 +220,8 @@ async def main(loop):
     asyncio.ensure_future(register_devices(gn_conn))
 
     # burn in the sensor and then fire it up
-    await burn_in_sensor(sensor, burn_in)
+    await burn_in_sensor(sensor, burn_in, gn_conn)
+    gn_conn.LOG('Burn-in complete, starting poller')
     asyncio.ensure_future(poll_sensor(gn_conn, sensor, poll_time, uid_prefix))
     return
 
