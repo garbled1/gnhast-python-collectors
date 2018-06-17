@@ -148,24 +148,24 @@ async def initial_setup(args, uid_prefix, loop):
     gas_dev = gn_conn.new_device(uid_prefix + 'gas', 'BME680 Gas Sensor',
                                  gn_conn.cf_type.index('sensor'),
                                  gn_conn.cf_subt.index('number'))
-    gas_dev['rrdname'] = gas_dev['name']
+    gas_dev['rrdname'] = gas_dev['name'].replace(' ', '_')[:20]
 
     hum_dev = gn_conn.new_device(uid_prefix + 'humid', 'BME680 Humidity Sensor',
                                  gn_conn.cf_type.index('sensor'),
                                  gn_conn.cf_subt.index('humid'))
-    hum_dev['rrdname'] = hum_dev['name']
+    hum_dev['rrdname'] = hum_dev['name'].replace(' ', '_')[:20]
 
     temp_dev = gn_conn.new_device(uid_prefix + 'temp',
                                   'BME680 Temperature Sensor',
                                   gn_conn.cf_type.index('sensor'),
                                   gn_conn.cf_subt.index('temp'))
-    temp_dev['rrdname'] = temp_dev['name']
+    temp_dev['rrdname'] = temp_dev['name'].replace(' ', '_')[:20]
 
     pres_dev = gn_conn.new_device(uid_prefix + 'pres',
                                   'BME680 Pressure Sensor',
                                   gn_conn.cf_type.index('sensor'),
                                   gn_conn.cf_subt.index('pressure'))
-    pres_dev['rrdname'] = pres_dev['name']
+    pres_dev['rrdname'] = pres_dev['name'].replace(' ', '_')[:20]
 
     print("Re-writing config file: {0}".format(args.conf))
     gn_conn.write_conf_file(args.conf)
