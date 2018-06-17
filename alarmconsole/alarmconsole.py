@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+#
+# Super simple collector that watches for alarms, and prints them to the
+# console with pretty colors for severity.  Good example of the alarm callback
+#
 
 import time
 import argparse
@@ -85,8 +89,35 @@ async def register_devices(gn_conn):
 
 
 def coll_alarm_cb(alarm):
-    print('GOT ALARM')
-    print('sev: {0}'.format(alarm['alsev']))
+    sev = int(alarm['alsev'])
+    color = Fore.GREEN
+    if sev < 10:
+        color = Fore.GREEN + Style.DIM
+    elif sev >= 10 and sev < 20:
+        color = Fore.GREEN + Style.BRIGHT
+    elif sev >= 20 and sev < 35:
+        color = Fore.YELLOW + Style.DIM
+    elif sev >= 35 and sev < 55:
+        color = Fore.YELLOW + Style.BRIGHT
+    elif sev >= 55 and sev < 75:
+        color = Fore.RED + Style.DIM
+    else:
+        color = Fore.RED + Style.BRIGHT
+
+    myflag = AlarmChan(int(alarm['alchan']))
+        
+    string = Style.RESET_ALL + 'Sev' + color + ' {0:2d}'.format(sev)
+    string += Style.RESET_ALL
+    string += '/{0:12s} '.format(myflag.to_simple_str())
+    string += 'ALARM: {0:10s}'.format(alarm['aluid'])
+    string += color + ' {0:41s}'.format(alarm['altext'])
+    string += Style.RESET_ALL
+
+    if sev == 0:
+        string = Fore.GREEN + 'ALARM: {0} CLEARED'.format(alarm['aluid'])
+        string += Style.RESET_ALL
+    
+    print(string)
 
         
 async def main(loop):
