@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import bme680
 import time
 import argparse
 import asyncio
@@ -10,7 +9,6 @@ from gnhast import gnhast
 
 
 debug_mode = False
-gas_baseline = 0
 
 
 def parse_cmdline():
@@ -41,8 +39,9 @@ async def poll_sensor(gn_conn, poll_time):
 
     while True:
         # set some values for the device
-        temp_dev['data'] = 7
-        temp_dev['lastupd'] = cur_time
+        cur_time = int(time.time())
+        test_dev['data'] = 7
+        test_dev['lastupd'] = cur_time
 
         # tell gnhast about the values
         await gn_conn.gn_update_device(test_dev)
@@ -51,7 +50,7 @@ async def poll_sensor(gn_conn, poll_time):
         await asyncio.sleep(poll_time)
 
 
-async def initial_setup(args, uid_prefix, loop):
+async def initial_setup(args, loop):
     print("This is your first run of the collector, setting up")
     print("Using gnhast server at {0}:{1}".format(args.server, str(args.port)))
     try:
@@ -73,7 +72,7 @@ async def initial_setup(args, uid_prefix, loop):
     print("Wrote initial config file at {0}, connecting to gnhastd".format(args.conf))
 
     gn_conn = gnhast.gnhast(loop, args.conf)
-    await gn_conn.gn_build_client('skeleton-{0}')
+    await gn_conn.gn_build_client('skeleton')
 
     print("Connection established, wiring devices")
     test_dev = gn_conn.new_device('testdev', 'Skeleton Test Device',
@@ -104,8 +103,9 @@ async def main(loop):
 
     # look for a config file, if it doesn't exist, build a generic one
     if not os.path.isfile(args.conf):
-        await initial_setup(args, uid_prefix, loop)
-        exit(0)
+        await initial_setup(args, loop)
+        loop.stop()
+        return
 
     # instantiate the gnhast class with the conf file as an argument
     gn_conn = gnhast.gnhast(loop, args.conf)
