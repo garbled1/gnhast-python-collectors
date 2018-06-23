@@ -88,7 +88,7 @@ async def register_devices(gn_conn):
         await gn_conn.gn_register_device(dev)
 
 
-def coll_alarm_cb(alarm):
+async def coll_alarm_cb(alarm):
     sev = int(alarm['alsev'])
     color = Fore.GREEN
     if sev < 10:

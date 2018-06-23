@@ -78,7 +78,7 @@ async def initial_setup(args, loop):
     test_dev = gn_conn.new_device('testdev', 'Skeleton Test Device',
                                   gn_conn.cf_type.index('sensor'),
                                   gn_conn.cf_subt.index('number'))
-    test_dev['rrdname'] = test_dev['name']
+    test_dev['rrdname'] = test_dev['name'].replace(' ', '_')[:20]
 
     print("Re-writing config file: {0}".format(args.conf))
     gn_conn.write_conf_file(args.conf)

@@ -10,6 +10,9 @@ from gnhast import gnhast
 
 debug_mode = False
 gn_conn = None
+refuid = ''
+compuid = ''
+diffuid = ''
 
 
 def parse_cmdline():
@@ -59,7 +62,14 @@ async def initial_setup(args, loop):
     gn_conn = gnhast.gnhast(loop, args.conf)
     await gn_conn.gn_build_client('presdiff')
 
-    print("Connection established")
+    print("Connection established, wiring devices")
+
+    diff_dev = gn_conn.new_device('presdiff', 'Pressure Difference',
+                                 gn_conn.cf_type.index('sensor'),
+                                 gn_conn.cf_subt.index('pressure'))
+    diff_dev['rrdname'] = diff_dev['name'].replace(' ', '_')[:20]
+
+
     print("Re-writing config file: {0}".format(args.conf))
     gn_conn.write_conf_file(args.conf)
 
@@ -70,25 +80,68 @@ async def initial_setup(args, loop):
     print("Edit it to fill in refuid and compuid, then restart collector")
 
 
-async def _coll_reg_cb(dev):
+async def coll_reg_cb(dev):
     gn_conn.LOG('Got device {0} asking for feed.'.format(dev['uid']))
     await gn_conn.gn_feed_device(dev, gn_conn.config['presdiff']['update'])
     await gn_conn.gn_ask_device(dev)
 
 
-# stupid hack to bounce arount the async wait thing
-def coll_reg_cb(dev):
-    loop = asyncio.get_event_loop()
-    loop.create_task(_coll_reg_cb(dev))
+async def coll_upd_cb(dev):
+    cur_time = int(time.time())
+    max_skew = gn_conn.config['presdiff']['update'] * 5
+    gn_conn.LOG_DEBUG('Got data for {0} : {1}'.format(dev['uid'], dev['data']))
+    if dev['uid'] == compuid:
+        refdev = gn_conn.find_dev_byuid(refuid)
+        if refdev is None:
+            gn_conn.LOG_ERROR('Cannot find refdev!')
+            gn_conn.collector_is_healthy = False
+            return
+        compdev = dev
+        skew = cur_time - refdev['lastupd']
+        if skew > max_skew:
+            gn_conn.LOG_WARNING('Refdev last update is too old: {0}'.format(skew))
+            gn_conn.collector_is_healthy = False
+            return
+    elif dev['uid'] == refuid:
+        compdev = gn_conn.find_dev_byuid(compuid)
+        if compdev is None:
+            gn_conn.LOG_ERROR('Cannot find compdev!')
+            gn_conn.collector_is_healthy = False
+            return
+        refdev = dev
+        skew = cur_time - compdev['lastupd']
+        if skew > max_skew:
+            gn_conn.LOG_WARNING('compdev last update is too old: {0}'.format(skew))
+            gn_conn.collector_is_healthy = False
+            return
+
+    # Now we have both devices and they are happy, let us compare
+    pressure_diff = refdev['data'] - compdev['data']
+    gn_conn.LOG_DEBUG('Pressure Diff: {0:2f}'.format(pressure_diff))
+
+    pdev = gn_conn.find_dev_byuid(diffuid)
+    if pdev is None:
+        gn_conn.LOG_ERROR('Cannot find pressure diff device')
+        return
+    pdev['data'] = pressure_diff
+    await gn_conn.gn_update_device(pdev)
 
 
-def coll_upd_cb(dev):
-    gn_conn.LOG('Got data for {0} : {1}'.format(dev['uid'], dev['data']))
+async def register_devices(gn_conn):
+    global diffuid
+    # because we call this before the ldevs, and we only have one dev,
+    # this works...
+    for dev in gn_conn.devices:
+        await gn_conn.gn_register_device(dev)
+        diffuid = dev['uid']
 
-    
+
 async def main(loop):
     global debug_mode
     global gn_conn
+    global refuid
+    global compuid
+
     args = parse_cmdline()
     if args.debug:
         debug_mode = args.debug
@@ -107,7 +160,7 @@ async def main(loop):
     await gn_conn.gn_build_client('presdiff')
     gn_conn.LOG("Pressure Differential collector starting up")
 
-    # Read the update value from the skeleton section of the config file
+    # Read the update value from the presdiff section of the config file
     poll_time = gn_conn.config['presdiff']['update']
     refuid = gn_conn.config['presdiff']['refuid']
     compuid = gn_conn.config['presdiff']['compuid']
@@ -124,6 +177,7 @@ async def main(loop):
 
     # fire up the listener and do gnhastly things..
     asyncio.ensure_future(gn_conn.gnhastd_listener())
+    asyncio.ensure_future(register_devices(gn_conn))
 
     # wire up callbacks
     gn_conn.coll_reg_cb = coll_reg_cb
