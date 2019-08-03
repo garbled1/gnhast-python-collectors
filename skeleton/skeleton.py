@@ -68,6 +68,10 @@ async def initial_setup(args, loop):
     print('skeleton {', file=cf)
     print('  update = 5', file=cf)
     print('}', file=cf)
+    print('misc {', file=cf)
+    print('  logfile = "/usr/local/var/log/influxcoll.log"', file=cf)
+    print('}', file=cf)
+
     cf.close()
     print("Wrote initial config file at {0}, connecting to gnhastd".format(args.conf))
 
@@ -97,7 +101,13 @@ async def register_devices(gn_conn):
 
 async def main(loop):
     global debug_mode
-    args = parse_cmdline()
+
+    try:
+        args = parse_cmdline()
+    except SystemExit:
+        loop.stop()
+        return
+
     if args.debug:
         debug_mode = args.debug
 
@@ -122,6 +132,9 @@ async def main(loop):
     for sig in [signal.SIGTERM, signal.SIGINT]:
         loop.add_signal_handler(sig,
                                 lambda: asyncio.ensure_future(gn_conn.shutdown(sig, loop)))
+    # log reopen on SIGHUP
+    loop.add_signal_handler(signal.SIGHUP,
+                            lambda: asyncio.ensure_future(gn_conn.log_open()))
 
     # fire up the listener and do gnhastly things..
     asyncio.ensure_future(gn_conn.gnhastd_listener())
