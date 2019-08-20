@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import bme680
 import time
@@ -92,19 +92,22 @@ async def poll_sensor(gn_conn, sensor, poll_time, uid_prefix):
             hum = sensor.data.humidity
             # When the gas sensor is running, the temp is high by 2 deg C
             temp = sensor.data.temperature - 2.0
+            send_temp = temp
+            if gn_conn.config['bme680coll']['tscale'] != 1:
+                send_temp = gn_conn.gn_scale_temp(temp, 1, gn_conn.config['bme680coll']['tscale'])
             pressure = sensor.data.pressure
             cur_time = int(time.time())
 
-            gas_dev['data'] = gas
+            gas_dev['data'] = int(gas)
             gas_dev['lastupd'] = cur_time
             hum_dev['data'] = hum
             hum_dev['lastupd'] = cur_time
-            temp_dev['data'] = temp
+            temp_dev['data'] = send_temp
             temp_dev['lastupd'] = cur_time
             pres_dev['data'] = pressure
             pres_dev['lastupd'] = cur_time
 
-            gn_conn.LOG_DEBUG('Gas:{0:.2f} Humid:{1:.2f} Temp:{2:.2f} Pres:{3:.2f}'.format(gas, hum, temp, pressure))
+            gn_conn.LOG_DEBUG('Gas:{0:.2f} Humid:{1:.2f} Temp:{2:.2f} Pres:{3:.2f}'.format(gas, hum, send_temp, pressure))
 
             await gn_conn.gn_update_device(gas_dev)
             await gn_conn.gn_update_device(hum_dev)
@@ -149,23 +152,27 @@ async def initial_setup(args, uid_prefix, loop):
                                  gn_conn.cf_type.index('sensor'),
                                  gn_conn.cf_subt.index('number'))
     gas_dev['rrdname'] = gas_dev['name'].replace(' ', '_')[:20]
+    gas_dev['proto'] = 35
 
     hum_dev = gn_conn.new_device(uid_prefix + 'humid', 'BME680 Humidity Sensor',
                                  gn_conn.cf_type.index('sensor'),
                                  gn_conn.cf_subt.index('humid'))
     hum_dev['rrdname'] = hum_dev['name'].replace(' ', '_')[:20]
+    hum_dev['proto'] = 35
 
     temp_dev = gn_conn.new_device(uid_prefix + 'temp',
                                   'BME680 Temperature Sensor',
                                   gn_conn.cf_type.index('sensor'),
                                   gn_conn.cf_subt.index('temp'))
     temp_dev['rrdname'] = temp_dev['name'].replace(' ', '_')[:20]
+    temp_dev['proto'] = 35
 
     pres_dev = gn_conn.new_device(uid_prefix + 'pres',
                                   'BME680 Pressure Sensor',
                                   gn_conn.cf_type.index('sensor'),
                                   gn_conn.cf_subt.index('pressure'))
     pres_dev['rrdname'] = pres_dev['name'].replace(' ', '_')[:20]
+    pres_dev['proto'] = 35
 
     print("Re-writing config file: {0}".format(args.conf))
     gn_conn.write_conf_file(args.conf)

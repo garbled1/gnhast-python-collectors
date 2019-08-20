@@ -1,0 +1,12 @@
+[Unit]
+Description=Gnhastd pressure difference collector
+Wants=gnhastd.service
+After=gnhastd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/presdiff.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

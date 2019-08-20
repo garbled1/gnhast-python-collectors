@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import time
 import argparse
@@ -68,6 +68,8 @@ async def initial_setup(args, loop):
                                  gn_conn.cf_type.index('sensor'),
                                  gn_conn.cf_subt.index('pressure'))
     diff_dev['rrdname'] = diff_dev['name'].replace(' ', '_')[:20]
+    # calculated type
+    diff_dev['proto'] = 16
 
 
     print("Re-writing config file: {0}".format(args.conf))
