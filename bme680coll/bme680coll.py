@@ -109,6 +109,7 @@ async def poll_sensor(gn_conn, sensor, poll_time, uid_prefix):
 
             gn_conn.LOG_DEBUG('Gas:{0:.2f} Humid:{1:.2f} Temp:{2:.2f} Pres:{3:.2f}'.format(gas, hum, send_temp, pressure))
 
+            gn_conn.collector_healthy = True
             await gn_conn.gn_update_device(gas_dev)
             await gn_conn.gn_update_device(hum_dev)
             await gn_conn.gn_update_device(temp_dev)
@@ -116,6 +117,7 @@ async def poll_sensor(gn_conn, sensor, poll_time, uid_prefix):
 
         else:
             gn_conn.LOG_WARNING("Sensors not operating")
+            gn_conn.collector_healthy = False
 
         await asyncio.sleep(poll_time)
 

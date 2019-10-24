@@ -44,13 +44,18 @@ def parse_cmdline():
 
 def run_notify(venstar_name):
     notify_cmd = "notify_listen -t 65 2> /dev/null | grep -B 1 name:" + venstar_name + ": | grep ^Location | sort -u | awk '{print $2}' | tr -d '\r'"
-    result = subprocess.run(notify_cmd, stdout=subprocess.PIPE, shell=True)
 
-    r_url = result.stdout.decode("utf-8")
+    notify_url = ''
+    i = 0
+
+    while notify_url is '' and i < 5:
+        result = subprocess.run(notify_cmd, stdout=subprocess.PIPE, shell=True)
+        r_url = result.stdout.decode("utf-8")
+        notify_url = r_url.rstrip()
+        i += 1
         
-    print("Notify returned url: {0}".format(r_url.rstrip()))
-    
-    return(r_url.rstrip())
+    print("Notify returned url after {1} tries: {0}".format(notify_url,i))
+    return(notify_url)
 
 
 def parse_json(json_data, max_days):
@@ -135,7 +140,7 @@ def main():
     ven_runtimes = venstar_url + '/query/runtimes'
     print("Asking {0} for runtime data".format(venstar_name))
     try:
-        run_d = urllib.request.urlopen(ven_runtimes, timeout=15)
+        run_d = urllib.request.urlopen(ven_runtimes, timeout=240)
         data = run_d.read()
         encoding = run_d.info().get_content_charset('utf-8')
         runtime_data = json.loads(data.decode(encoding))
